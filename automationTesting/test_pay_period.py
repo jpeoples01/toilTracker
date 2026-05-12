@@ -1,6 +1,6 @@
 # payPeriodTest.py
 def test_pay_period_display(page):
-    page.get_by_text("Pay period").scroll_into_view_if_needed()
+    page.get_by_text("Pay period", exact=True).first.scroll_into_view_if_needed()
 
     assert page.get_by_text("Period start").is_visible()
     assert page.get_by_text("Period end").is_visible()
@@ -17,6 +17,8 @@ def test_weeks_value_valid(page):
 
 def test_month_selector_changes_period(page):
     month_select = page.get_by_label("Select pay period month")
-    month_select.select_option(index=1)
+    month_select.click()
+    page.wait_for_timeout(500)
+    page.get_by_role("option").nth(1).click()
 
     assert page.get_by_text("Period start").is_visible()
