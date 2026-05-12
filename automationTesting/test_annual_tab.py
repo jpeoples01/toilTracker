@@ -1,6 +1,7 @@
 # annualTabTest.py
 def switch_to_annual_tab(page):
-    page.get_by_text("TOIL Annual Leave Accruement").click()
+    assert page.get_by_text("TOIL MONTHLY TRACKER").is_visible()
+    page.get_by_text("TOIL ANNUAL LEAVE ACCRUEMENT").click()
     page.wait_for_timeout(1000)
 
 

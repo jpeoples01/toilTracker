@@ -1,11 +1,5 @@
 {
-  "entries": [
-    {
-      "date": "2026-05-08",
-      "hours_worked": 11.0,
-      "overtime_hours": 3.0
-    }
-  ],
-  "hours_used": 2.0,
-  "standard_day": 10
+  "entries": [],
+  "hours_used": 0.0,
+  "standard_day": 8
 }

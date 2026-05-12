@@ -1,11 +1,15 @@
 # monthlyTabTest.py
 def test_monthly_tab_visible(page):
-    assert page.get_by_text("TOIL Monthly Tracker").is_visible()
+    assert page.get_by_text("TOIL MONTHLY TRACKER").is_visible()
 
 
 def test_monthly_default_working_pattern(page):
     radio = page.get_by_label("5 days / 40 hours")
     assert radio.is_checked()
+
+def test_monthly_unselected_working_pattern(page):
+    radio = page.get_by_label("4 days / 40 hours")
+    assert not radio.is_checked()
 
 
 def test_enter_hours_and_calculate(page):
@@ -13,7 +17,7 @@ def test_enter_hours_and_calculate(page):
     page.get_by_label("Hours worked").first.fill("40")
     page.get_by_text("Calculate").click()
 
-    assert page.get_by_text("Total hours this month").is_visible()
+    assert page.get_by_text("Total hours this month (worked + holiday):").is_visible()
 
 
 def test_monthly_overtime_message(page):
