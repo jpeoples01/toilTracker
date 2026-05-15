@@ -337,10 +337,12 @@ with tab3:
                 if new_minutes <= last_minutes:
                     st.error(f'{next_action} time must be after the previous entry ({events[-1]["time"]}).')
                 else:
-                    st.session_state.clock_events.append({'type': next_action, 'time': event_time.strftime('%H:%M')})
+                    clock_data['events'].append({'type': next_action, 'time': event_time.strftime('%H:%M')})
+                    save_clock(clock_data)
                     st.rerun()
             else:
-                st.session_state.clock_events.append({'type': next_action, 'time': event_time.strftime('%H:%M')})
+                clock_data['events'].append({'type': next_action, 'time': event_time.strftime('%H:%M')})
+                save_clock(clock_data)
                 st.rerun()
         except ValueError:
             st.error('Please enter a valid time in HH:MM format, e.g. 08:30')
