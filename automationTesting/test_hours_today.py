@@ -86,7 +86,8 @@ def test_metrics_visible_after_clock_in(page):
     # from number inputs on other tabs
     assert page.locator('[data-testid="stMetric"]').filter(has_text="Hours worked").first.is_visible()
     assert page.locator('[data-testid="stMetric"]').filter(has_text="Target").first.is_visible()
-    assert page.locator('[data-testid="stMetric"]').filter(has_text="Remaining").first.is_visible()
+    # use exact=True to avoid matching tab 2's "Hours remaining" metric
+    assert page.get_by_text("Remaining", exact=True).first.is_visible()
 
 
 def test_finish_time_shown_when_clocked_in(page):
@@ -166,7 +167,7 @@ def test_overtime_over_3h_shows_annual_toil_message(page):
     click_clock_button(page)
 
     # 11.5 hours — 3h 30m overtime (over 3h threshold)
-    # Hours Today tab shows the overtime amount without TOIL distinction
+    # Hours Today tab shows the overtime amount with TOIL qualification
     assert page.get_by_text("3h 30m of overtime", exact=False).is_visible()
 
 

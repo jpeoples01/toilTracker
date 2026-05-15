@@ -1,0 +1,22 @@
+# App data files (local state, not for version control)
+toil_log.json
+clock_log.json
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+# OS
+.DS_Store
+Thumbs.db

@@ -51,14 +51,7 @@ def page(streamlit_app):
         context = browser.new_context()
         pg = context.new_page()
         pg.goto(APP_URL)
-        pg.wait_for_load_state('networkidle')
-        # wait for Streamlit to finish rendering
-        time.sleep(2)
+        pg.wait_for_timeout(3000)
         yield pg
         context.close()
         browser.close()
-
-
-def go_to_tab(page: Page, tab_name: str):
-    page.get_by_role('tab', name=tab_name).click()
-    time.sleep(1)

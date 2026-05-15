@@ -1,5 +1,5 @@
 def switch_to_annual_tab(page):
-    assert page.get_by_text("TOIL MONTHLY TRACKER").is_visible()
+    assert page.locator("text=TOIL MONTHLY TRACKER >> visible=true").is_visible()
     page.get_by_text("TOIL ANNUAL LEAVE ACCRUEMENT").click()
     page.wait_for_timeout(1000)
 

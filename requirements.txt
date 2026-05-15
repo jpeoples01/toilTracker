@@ -1,0 +1,5 @@
+streamlit>=1.30.0
+pytest>=8.0.0
+playwright>=1.40.0
+pytest-base-url>=2.1.0
+pytest-timeout>=2.2.0
