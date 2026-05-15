@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, time as dtime
 import calendar
 import json
 import os
@@ -86,7 +86,20 @@ def save_log(log):
     with open(LOG_FILE, 'w') as f:
         json.dump(log, f, indent=2)
 
-tab1, tab2 = st.tabs(['TOIL Monthly Tracker', 'TOIL Annual Leave Accruement'])
+def time_to_minutes(t):
+    return t.hour * 60 + t.minute
+
+def minutes_to_time_str(total_minutes):
+    total_minutes = total_minutes % (24 * 60)
+    h = total_minutes // 60
+    m = total_minutes % 60
+    suffix = 'am' if h < 12 else 'pm'
+    display_h = h if h <= 12 else h - 12
+    if display_h == 0:
+        display_h = 12
+    return f'{display_h}:{m:02d}{suffix}'
+
+tab1, tab2, tab3 = st.tabs(['TOIL Monthly Tracker', 'TOIL Annual Leave Accruement', 'Hours Today'])
 
 with tab1:
     work_pattern_tab1 = st.radio('Working pattern', ['5 days / 40 hours', '4 days / 40 hours'], key='pattern_tab1')
@@ -185,7 +198,6 @@ with tab2:
 
     st.markdown(RED_DIVIDER, unsafe_allow_html=True)
 
-    # summary metrics
     total_banked = sum(e['overtime_hours'] for e in log['entries'])
     total_remaining = total_banked - log['hours_used']
 
@@ -261,7 +273,7 @@ with tab2:
     if st.button('🗑 Clear all TOIL data', key='clear_log'):
         if 'confirm_clear' not in st.session_state:
             st.session_state.confirm_clear = True
-        
+
     if st.session_state.get('confirm_clear'):
         st.warning('Are you sure? This will delete all logged entries and reset your hours used.')
         col_yes, col_no = st.columns([1, 1])
@@ -272,3 +284,132 @@ with tab2:
         if col_no.button('Cancel', key='confirm_no'):
             st.session_state.confirm_clear = False
             st.rerun()
+
+with tab3:
+    st.subheader('Hours Today')
+
+    work_pattern_tab3 = st.radio('Working pattern', ['5 days / 40 hours (8h day)', '4 days / 40 hours (10h day)'], key='pattern_tab3')
+    target_minutes = 8 * 60 if '8h' in work_pattern_tab3 else 10 * 60
+
+    st.markdown(RED_DIVIDER, unsafe_allow_html=True)
+
+    # initialise session state for clock events
+    if 'clock_events' not in st.session_state:
+        st.session_state.clock_events = []
+
+    # determine what the next action should be
+    events = st.session_state.clock_events
+    next_action = 'Clock In' if len(events) == 0 or events[-1]['type'] == 'Clock Out' else 'Clock Out'
+
+    col_time, col_btn = st.columns([2, 1])
+    default_time = datetime.now().strftime('%H:%M')
+    event_time_str = col_time.text_input(f'{next_action} time', value=default_time, placeholder='HH:MM', key='event_time')
+
+    if col_btn.button(next_action, key='clock_btn'):
+        try:
+            parsed = datetime.strptime(event_time_str.strip(), '%H:%M')
+            event_time = parsed.time()
+            new_minutes = time_to_minutes(event_time)
+            if events:
+                last_minutes = time_to_minutes(dtime(int(events[-1]['time'].split(':')[0]), int(events[-1]['time'].split(':')[1])))
+                if new_minutes <= last_minutes:
+                    st.error(f'{next_action} time must be after the previous entry ({events[-1]["time"]}).')
+                else:
+                    st.session_state.clock_events.append({'type': next_action, 'time': event_time.strftime('%H:%M')})
+                    st.rerun()
+            else:
+                st.session_state.clock_events.append({'type': next_action, 'time': event_time.strftime('%H:%M')})
+                st.rerun()
+        except ValueError:
+            st.error('Please enter a valid time in HH:MM format, e.g. 08:30')
+
+    st.markdown(RED_DIVIDER, unsafe_allow_html=True)
+
+    # show current event log
+    if events:
+        st.markdown('**Today\'s entries**')
+        for i, event in enumerate(events):
+            col_type, col_t, col_del = st.columns([2, 2, 0.5])
+            col_type.write(event['type'])
+            col_t.write(event['time'])
+            if col_del.button('✕', key=f'del_event_{i}'):
+                st.session_state.clock_events.pop(i)
+                st.rerun()
+
+        st.markdown(RED_DIVIDER, unsafe_allow_html=True)
+
+        # calculate time worked so far from paired clock in/out events
+        minutes_worked = 0
+        unpaired_clock_in = None
+        last_cin = None
+        for event in events:
+            t = int(event['time'].split(':')[0]) * 60 + int(event['time'].split(':')[1])
+            if event['type'] == 'Clock In':
+                last_cin = t
+            elif event['type'] == 'Clock Out' and last_cin is not None:
+                minutes_worked += t - last_cin
+                last_cin = None
+        # if last_cin is still set, there's an unpaired clock in
+        if last_cin is not None:
+            for event in reversed(events):
+                if event['type'] == 'Clock In':
+                    unpaired_clock_in = event['time']
+                    break
+
+        minutes_remaining = target_minutes - minutes_worked
+        hours_done = minutes_worked // 60
+        mins_done = minutes_worked % 60
+
+        # if currently clocked in, add live elapsed time since last clock in
+        # use integer minute arithmetic only to avoid datetime subtraction issues
+        if unpaired_clock_in is not None:
+            cin_parts = unpaired_clock_in.split(':')
+            cin_total = int(cin_parts[0]) * 60 + int(cin_parts[1])
+            now_total = datetime.now().hour * 60 + datetime.now().minute
+            live_elapsed = max(now_total - cin_total, 0)
+            live_minutes_worked = minutes_worked + live_elapsed
+            live_minutes_remaining = target_minutes - live_minutes_worked
+        else:
+            live_minutes_worked = minutes_worked
+            live_minutes_remaining = minutes_remaining
+
+        hours_done = live_minutes_worked // 60
+        mins_done = live_minutes_worked % 60
+
+        col_m1, col_m2, col_m3 = st.columns(3)
+        col_m1.metric('Hours worked', f'{hours_done}h {mins_done}m')
+        col_m2.metric('Target', f'{target_minutes // 60}h')
+        col_m3.metric('Remaining', f'{max(live_minutes_remaining, 0) // 60}h {max(live_minutes_remaining, 0) % 60}m')
+        
+        # auto refresh every 60 seconds while clocked in
+        if unpaired_clock_in is not None:
+            st.markdown('<meta http-equiv="refresh" content="60">', unsafe_allow_html=True)
+
+        st.markdown(RED_DIVIDER, unsafe_allow_html=True)
+
+        if unpaired_clock_in is not None:
+            # currently clocked in — calculate finish time from now
+            cin_parts = unpaired_clock_in.split(':')
+            cin_minutes = int(cin_parts[0]) * 60 + int(cin_parts[1])
+            finish_minutes = cin_minutes + minutes_remaining
+            if minutes_remaining > 0:
+                st.success(f'You can clock out for the day at **{minutes_to_time_str(finish_minutes)}**!')
+            else:
+                overtime_mins = abs(minutes_remaining)
+                st.success(f'You\'ve hit your {target_minutes // 60}h target! You\'ve done {overtime_mins // 60}h {overtime_mins % 60}m overtime today.')
+        else:
+            # currently clocked out — show when they need to clock back in and work remaining time
+            if minutes_remaining > 0:
+                st.info(f'You have {minutes_remaining // 60}h {minutes_remaining % 60}m left to work today. Clock back in to see your finish time.')
+            else:
+                overtime_mins = abs(minutes_remaining)
+                st.success(f'You\'ve hit your {target_minutes // 60}h target for the day! You have {overtime_mins // 60}h {overtime_mins % 60}m of overtime.')
+
+    else:
+        st.info('No entries yet — add your first Clock In time above.')
+
+    st.markdown(RED_DIVIDER, unsafe_allow_html=True)
+
+    if st.button('Reset today\'s clock', key='reset_clock'):
+        st.session_state.clock_events = []
+        st.rerun()
