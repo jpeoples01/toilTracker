@@ -9,6 +9,7 @@ from playwright.sync_api import sync_playwright, Page
 APP_PATH = os.path.join(os.path.dirname(__file__), '..', 'toilTrackerUI.py')
 APP_URL = 'http://localhost:8501'
 LOG_FILE = os.path.join(os.path.dirname(__file__), '..', 'toil_log.json')
+CLOCK_FILE = os.path.join(os.path.dirname(__file__), '..', 'clock_log.json')
 CLEAN_LOG = {'entries': [], 'hours_used': 0.0, 'standard_day': 8}
 
 
@@ -17,9 +18,15 @@ def reset_log():
         json.dump(CLEAN_LOG, f, indent=2)
 
 
+def reset_clock():
+    if os.path.exists(CLOCK_FILE):
+        os.remove(CLOCK_FILE)
+
+
 @pytest.fixture(scope='session')
 def streamlit_app():
     reset_log()
+    reset_clock()
     proc = subprocess.Popen(
         ['python', '-m', 'streamlit', 'run', APP_PATH,
          '--server.headless', 'true',
@@ -38,6 +45,7 @@ def streamlit_app():
 @pytest.fixture(scope='function')
 def page(streamlit_app):
     reset_log()
+    reset_clock()
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context()
