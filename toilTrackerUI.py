@@ -57,6 +57,7 @@ button[kind="primary"], button[kind="secondary"] {
 
 RED_DIVIDER = '<hr style="border:none; border-top: 1px solid #E63946; margin: 1rem 0;">'
 LOG_FILE = 'toil_log.json'
+CLOCK_FILE = 'clock_log.json'
 
 def to_minutes(h):
     return int(h) * 60 + round((h % 1) * 100)
@@ -89,6 +90,20 @@ def load_log():
 def save_log(log):
     with open(LOG_FILE, 'w') as f:
         json.dump(log, f, indent=2)
+
+def load_clock():
+    today = now_london().strftime('%Y-%m-%d')
+    if os.path.exists(CLOCK_FILE):
+        with open(CLOCK_FILE, 'r') as f:
+            data = json.load(f)
+        # auto-reset if the saved date is not today
+        if data.get('date') == today:
+            return data
+    return {'date': today, 'events': [], 'work_pattern': '5 days / 40 hours (8h day)'}
+
+def save_clock(data):
+    with open(CLOCK_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
 
 def time_to_minutes(t):
     return t.hour * 60 + t.minute
@@ -292,17 +307,20 @@ with tab2:
 with tab3:
     st.subheader('Hours Today')
 
-    work_pattern_tab3 = st.radio('Working pattern', ['5 days / 40 hours (8h day)', '4 days / 40 hours (10h day)'], key='pattern_tab3')
+    clock_data = load_clock()
+    saved_pattern = clock_data.get('work_pattern', '5 days / 40 hours (8h day)')
+    pattern_index = 0 if saved_pattern == '5 days / 40 hours (8h day)' else 1
+    work_pattern_tab3 = st.radio('Working pattern', ['5 days / 40 hours (8h day)', '4 days / 40 hours (10h day)'], key='pattern_tab3', index=pattern_index)
     target_minutes = 8 * 60 if '8h' in work_pattern_tab3 else 10 * 60
+    if work_pattern_tab3 != clock_data.get('work_pattern'):
+        clock_data['work_pattern'] = work_pattern_tab3
+        save_clock(clock_data)
 
     st.markdown(RED_DIVIDER, unsafe_allow_html=True)
 
-    # initialise session state for clock events
-    if 'clock_events' not in st.session_state:
-        st.session_state.clock_events = []
-
-    # determine what the next action should be
-    events = st.session_state.clock_events
+    # load clock events from file (persists across refreshes, auto-resets daily)
+    clock_data = load_clock()
+    events = clock_data['events']
     next_action = 'Clock In' if len(events) == 0 or events[-1]['type'] == 'Clock Out' else 'Clock Out'
 
     col_time, col_btn = st.columns([2, 1])
@@ -337,7 +355,8 @@ with tab3:
             col_type.write(event['type'])
             col_t.write(event['time'])
             if col_del.button('✕', key=f'del_event_{i}'):
-                st.session_state.clock_events.pop(i)
+                clock_data['events'].pop(i)
+                save_clock(clock_data)
                 st.rerun()
 
         st.markdown(RED_DIVIDER, unsafe_allow_html=True)
@@ -385,8 +404,13 @@ with tab3:
         col_m2.metric('Target', f'{target_minutes // 60}h')
         col_m3.metric('Remaining', f'{max(live_minutes_remaining, 0) // 60}h {max(live_minutes_remaining, 0) % 60}m')
         
-        # auto refresh every 60 seconds while clocked in
+        # auto refresh every 60 seconds while clocked in without losing tab state
         if unpaired_clock_in is not None:
+            if 'last_refresh' not in st.session_state:
+                st.session_state.last_refresh = now_london().minute
+            if now_london().minute != st.session_state.last_refresh:
+                st.session_state.last_refresh = now_london().minute
+                st.rerun()
             st.markdown('<meta http-equiv="refresh" content="60">', unsafe_allow_html=True)
 
         st.markdown(RED_DIVIDER, unsafe_allow_html=True)
@@ -415,5 +439,5 @@ with tab3:
     st.markdown(RED_DIVIDER, unsafe_allow_html=True)
 
     if st.button('Reset today\'s clock', key='reset_clock'):
-        st.session_state.clock_events = []
+        save_clock({'date': now_london().strftime('%Y-%m-%d'), 'events': [], 'work_pattern': work_pattern_tab3})
         st.rerun()
