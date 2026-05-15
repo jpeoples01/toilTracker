@@ -1,5 +1,9 @@
 import streamlit as st
 from datetime import date, timedelta, datetime, time as dtime
+from zoneinfo import ZoneInfo
+
+def now_london():
+    return datetime.now(ZoneInfo('Europe/London'))
 import calendar
 import json
 import os
@@ -302,7 +306,7 @@ with tab3:
     next_action = 'Clock In' if len(events) == 0 or events[-1]['type'] == 'Clock Out' else 'Clock Out'
 
     col_time, col_btn = st.columns([2, 1])
-    default_time = datetime.now().strftime('%H:%M')
+    default_time = now_london().strftime('%H:%M')
     event_time_str = col_time.text_input(f'{next_action} time', value=default_time, placeholder='HH:MM', key='event_time')
 
     if col_btn.button(next_action, key='clock_btn'):
@@ -365,7 +369,7 @@ with tab3:
         if unpaired_clock_in is not None:
             cin_parts = unpaired_clock_in.split(':')
             cin_total = int(cin_parts[0]) * 60 + int(cin_parts[1])
-            now_total = datetime.now().hour * 60 + datetime.now().minute
+            now_total = now_london().hour * 60 + now_london().minute
             live_elapsed = max(now_total - cin_total, 0)
             live_minutes_worked = minutes_worked + live_elapsed
             live_minutes_remaining = target_minutes - live_minutes_worked
