@@ -21,15 +21,20 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pytest-xdist pytest-timeout pytest-html
+          pip install pytest-xdist pytest-timeout pytest-html allure-pytest
           playwright install chromium
           playwright install-deps chromium
+
+      - name: Install Allure
+        run: |
+              sudo apt-get update
+              sudo apt-get install -y allure
 
       - name: Run tests
         env:
           PYTHONUNBUFFERED: 1
         run: |
-          pytest -n 3 --timeout=600 --html=report.html --self-contained-html
+          pytest -n 3 --timeout=600 --alluredir=reports
 
       
       - name: Upload test report
@@ -38,3 +43,16 @@ jobs:
         with:
           name: pytest-report
           path: report.html
+
+      - name: Generate Allure report
+        if: always()
+        run: |
+              allure generate reports -o reports/html --clean
+
+      - name: Upload Allure report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: reports/html
+

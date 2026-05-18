@@ -6,6 +6,7 @@ import json
 import sys
 from playwright.sync_api import sync_playwright
 import requests
+import allure
 
 APP_PATH = os.path.join(os.path.dirname(__file__), '..', 'toilTrackerUI.py')
 APP_URL = 'http://localhost:8501'
@@ -14,6 +15,14 @@ CLOCK_FILE = os.path.join(os.path.dirname(__file__), '..', 'clock_log.json')
 CLEAN_LOG = {'entries': [], 'hours_used': 0.0, 'standard_day': 8}
 CLEAN_CLOCK = {'date': '', 'events': [], 'work_pattern': '5 days / 40 hours (8h day)'}
 
+
+
+def attach_screenshot(page, name="screenshot"):
+    allure.attach(
+        page.screenshot(),
+        name=name,
+        attachment_type=allure.attachment_type.PNG
+    )
 
 def wait_for_app(port, timeout=30):
     url = f"http://localhost:{port}"
@@ -119,6 +128,4 @@ def pytest_runtest_makereport(item, call):
     if rep.when == "call" and rep.failed:
         page = item.funcargs.get("page")
         if page:
-            screenshot_path = f"screenshots/{item.name}.png"
-            os.makedirs("screenshots", exist_ok=True)
-            page.screenshot(path=screenshot_path)
+            attach_screenshot(page, item.name)
