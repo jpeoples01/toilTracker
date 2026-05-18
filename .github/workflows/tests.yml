@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pytest-xdist pytest-timeout
+          pip install pytest-xdist pytest-timeout pytest-html
           playwright install chromium
           playwright install-deps chromium
 
