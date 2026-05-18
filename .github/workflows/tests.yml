@@ -9,6 +9,7 @@ on:
 jobs:
   Integration:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -20,8 +21,12 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
+          pip install pytest-xdist pytest-timeout
           playwright install chromium
           playwright install-deps chromium
 
       - name: Run tests
-        run: pytest -n 3 --timeout=600
+        env:
+          PYTHONUNBUFFERED: 1
+        run: |
+          pytest -n 3 --timeout=600 -v
