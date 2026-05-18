@@ -110,3 +110,15 @@ def page(browser, streamlit_app):
 
     yield pg
     context.close()
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    rep = outcome.get_result()
+
+    if rep.when == "call" and rep.failed:
+        page = item.funcargs.get("page")
+        if page:
+            screenshot_path = f"screenshots/{item.name}.png"
+            os.makedirs("screenshots", exist_ok=True)
+            page.screenshot(path=screenshot_path)
