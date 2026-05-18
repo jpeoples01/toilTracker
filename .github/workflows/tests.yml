@@ -24,4 +24,4 @@ jobs:
           playwright install-deps chromium
 
       - name: Run tests
-        run: pytest -v --timeout=600
+        run: pytest -n 3 --timeout=600

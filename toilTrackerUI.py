@@ -1,14 +1,12 @@
 import streamlit as st
 from datetime import date, timedelta, datetime, time as dtime
 from zoneinfo import ZoneInfo
-import calendar
-import json
-import os
-
 
 def now_london():
     return datetime.now(ZoneInfo('Europe/London'))
-
+import calendar
+import json
+import os
 
 st.title('TOIL Tracker')
 
@@ -58,20 +56,31 @@ button[kind="primary"], button[kind="secondary"] {
 """, unsafe_allow_html=True)
 
 RED_DIVIDER = '<hr style="border:none; border-top: 1px solid #E63946; margin: 1rem 0;">'
-LOG_FILE = 'toil_log.json'
-CLOCK_FILE = 'clock_log.json'
-WEEKLY_TARGET_HOURS = 40
+WORKER_ID = os.environ.get("PYTEST_XDIST_WORKER", "local")
+
+LOG_FILE = f"toil_log_{WORKER_ID}.json"
+CLOCK_FILE = f"clock_log_{WORKER_ID}.json"
 
 
 def to_minutes(h):
-    return int(h) * 60 + round((h % 1) * 60)
+    # Convert safely via string to avoid float precision bugs
+    h_str = f"{h:.2f}"
+    hours_str, minutes_str = h_str.split(".")
+
+    hours = int(hours_str)
+    minutes = int(minutes_str)
+
+    if minutes >= 60:
+        st.error(f"Invalid input: {h} (minutes must be < .60)")
+        st.stop()
+
+    return hours * 60 + minutes
 
 
 def last_friday_of_month(year, month):
     last_day = date(year, month, calendar.monthrange(year, month)[1])
     offset = (last_day.weekday() - 4) % 7
     return last_day - timedelta(days=offset)
-
 
 def get_pay_period(year, month):
     payday = last_friday_of_month(year, month)
@@ -87,37 +96,32 @@ def get_pay_period(year, month):
             return start, period_end, payday, num_weeks
     return period_end_monday, period_end, payday, 4
 
-
 def load_log():
     if os.path.exists(LOG_FILE):
         with open(LOG_FILE, 'r') as f:
             return json.load(f)
     return {'entries': [], 'hours_used': 0.0, 'standard_day': 8}
 
-
 def save_log(log):
     with open(LOG_FILE, 'w') as f:
         json.dump(log, f, indent=2)
-
 
 def load_clock():
     today = now_london().strftime('%Y-%m-%d')
     if os.path.exists(CLOCK_FILE):
         with open(CLOCK_FILE, 'r') as f:
             data = json.load(f)
+        # auto-reset if the saved date is not today
         if data.get('date') == today:
             return data
     return {'date': today, 'events': [], 'work_pattern': '5 days / 40 hours (8h day)'}
-
 
 def save_clock(data):
     with open(CLOCK_FILE, 'w') as f:
         json.dump(data, f, indent=2)
 
-
 def time_to_minutes(t):
     return t.hour * 60 + t.minute
-
 
 def minutes_to_time_str(total_minutes):
     total_minutes = total_minutes % (24 * 60)
@@ -129,12 +133,8 @@ def minutes_to_time_str(total_minutes):
         display_h = 12
     return f'{display_h}:{m:02d}{suffix}'
 
-
 tab1, tab2, tab3 = st.tabs(['TOIL Monthly Tracker', 'TOIL Annual Leave Accruement', 'Hours Today'])
 
-# ──────────────────────────────────────────────────────────────
-# Tab 1 — TOIL Monthly Tracker
-# ──────────────────────────────────────────────────────────────
 with tab1:
     work_pattern_tab1 = st.radio('Working pattern', ['5 days / 40 hours', '4 days / 40 hours'], key='pattern_tab1')
 
@@ -145,6 +145,7 @@ with tab1:
 
     st.markdown(RED_DIVIDER, unsafe_allow_html=True)
     st.subheader('Pay period')
+    st.caption("Enter hours in HH.MM format (e.g. 38.30 = 38h 30m). Minutes must be less than 60.")
 
     today = date.today()
     months = [date(today.year, m, 1).strftime('%B %Y') for m in range(1, 13)]
@@ -203,8 +204,8 @@ with tab1:
 
         st.write(f'**Total hours this month (worked + holiday):** {total_minutes // 60} hours and {total_minutes % 60} minutes')
 
-        target_minutes_monthly = num_weeks * WEEKLY_TARGET_HOURS * 60
-        leftMinutes = target_minutes_monthly - total_minutes
+        targets = {3: 120, 4: 160, 5: 200}
+        leftMinutes = (targets[num_weeks] * 60) - total_minutes
 
         if leftMinutes > 0:
             st.error(f'You have {leftMinutes // 60} hours & {leftMinutes % 60} minutes left to work to get full pay')
@@ -214,9 +215,6 @@ with tab1:
             overtimeMinutes = abs(leftMinutes)
             st.success(f'You have worked {overtimeMinutes // 60} hours & {overtimeMinutes % 60} minutes of overtime this month!')
 
-# ──────────────────────────────────────────────────────────────
-# Tab 2 — TOIL Annual Leave Accruement
-# ──────────────────────────────────────────────────────────────
 with tab2:
     log = load_log()
 
@@ -227,6 +225,9 @@ with tab2:
         standard_day = 8
     else:
         standard_day = 10
+
+    log['standard_day'] = standard_day
+    save_log(log)
 
     st.caption(f'Qualification for Annual TOIL: {standard_day}h work day with 3h+ overtime accrued (e.g. {standard_day + 3} hours worked in a day)')
 
@@ -271,7 +272,6 @@ with tab2:
                     'overtime_hours': overtime
                 })
                 log['entries'].sort(key=lambda x: x['date'])
-                log['standard_day'] = standard_day
                 save_log(log)
                 st.rerun()
         else:
@@ -284,7 +284,6 @@ with tab2:
                                         value=float(log['hours_used']), key='hours_used_input')
     if st.button('Update hours used', key='update_used'):
         log['hours_used'] = hours_used_input
-        log['standard_day'] = standard_day
         save_log(log)
         st.rerun()
 
@@ -321,9 +320,6 @@ with tab2:
             st.session_state.confirm_clear = False
             st.rerun()
 
-# ──────────────────────────────────────────────────────────────
-# Tab 3 — Hours Today
-# ──────────────────────────────────────────────────────────────
 with tab3:
     st.subheader('Hours Today')
 
@@ -338,6 +334,8 @@ with tab3:
 
     st.markdown(RED_DIVIDER, unsafe_allow_html=True)
 
+    # load clock events from file (persists across refreshes, auto-resets daily)
+    clock_data = load_clock()
     events = clock_data['events']
     next_action = 'Clock In' if len(events) == 0 or events[-1]['type'] == 'Clock Out' else 'Clock Out'
 
@@ -367,6 +365,7 @@ with tab3:
 
     st.markdown(RED_DIVIDER, unsafe_allow_html=True)
 
+    # show current event log
     if events:
         st.markdown('**Today\'s entries**')
         for i, event in enumerate(events):
@@ -380,6 +379,7 @@ with tab3:
 
         st.markdown(RED_DIVIDER, unsafe_allow_html=True)
 
+        # calculate time worked so far from paired clock in/out events
         minutes_worked = 0
         unpaired_clock_in = None
         last_cin = None
@@ -390,6 +390,7 @@ with tab3:
             elif event['type'] == 'Clock Out' and last_cin is not None:
                 minutes_worked += t - last_cin
                 last_cin = None
+        # if last_cin is still set, there's an unpaired clock in
         if last_cin is not None:
             for event in reversed(events):
                 if event['type'] == 'Clock In':
@@ -397,7 +398,11 @@ with tab3:
                     break
 
         minutes_remaining = target_minutes - minutes_worked
+        hours_done = minutes_worked // 60
+        mins_done = minutes_worked % 60
 
+        # if currently clocked in, add live elapsed time since last clock in
+        # use integer minute arithmetic only to avoid datetime subtraction issues
         if unpaired_clock_in is not None:
             cin_parts = unpaired_clock_in.split(':')
             cin_total = int(cin_parts[0]) * 60 + int(cin_parts[1])
@@ -416,7 +421,8 @@ with tab3:
         col_m1.metric('Hours worked', f'{hours_done}h {mins_done}m')
         col_m2.metric('Target', f'{target_minutes // 60}h')
         col_m3.metric('Remaining', f'{max(live_minutes_remaining, 0) // 60}h {max(live_minutes_remaining, 0) % 60}m')
-
+        
+        # auto refresh every 60 seconds while clocked in without losing tab state
         if unpaired_clock_in is not None:
             if 'last_refresh' not in st.session_state:
                 st.session_state.last_refresh = now_london().minute
@@ -428,6 +434,7 @@ with tab3:
         st.markdown(RED_DIVIDER, unsafe_allow_html=True)
 
         if unpaired_clock_in is not None:
+            # currently clocked in — calculate finish time from now
             cin_parts = unpaired_clock_in.split(':')
             cin_minutes = int(cin_parts[0]) * 60 + int(cin_parts[1])
             finish_minutes = cin_minutes + minutes_remaining
@@ -435,21 +442,14 @@ with tab3:
                 st.success(f'You can clock out for the day at **{minutes_to_time_str(finish_minutes)}**!')
             else:
                 overtime_mins = abs(minutes_remaining)
-                overtime_hours = overtime_mins / 60
-                if overtime_hours >= 3:
-                    st.success(f'You\'ve hit your {target_minutes // 60}h target! You\'ve done {overtime_mins // 60}h {overtime_mins % 60}m overtime today — qualifies for annual TOIL pot.')
-                else:
-                    st.success(f'You\'ve hit your {target_minutes // 60}h target! You\'ve done {overtime_mins // 60}h {overtime_mins % 60}m overtime today.')
+                st.success(f'You\'ve hit your {target_minutes // 60}h target! You\'ve done {overtime_mins // 60}h {overtime_mins % 60}m overtime today.')
         else:
+            # currently clocked out — show when they need to clock back in and work remaining time
             if minutes_remaining > 0:
                 st.info(f'You have {minutes_remaining // 60}h {minutes_remaining % 60}m left to work today. Clock back in to see your finish time.')
             else:
                 overtime_mins = abs(minutes_remaining)
-                overtime_hours = overtime_mins / 60
-                if overtime_hours >= 3:
-                    st.success(f'You\'ve hit your {target_minutes // 60}h target for the day! You have {overtime_mins // 60}h {overtime_mins % 60}m of overtime — qualifies for annual TOIL pot.')
-                else:
-                    st.success(f'You\'ve hit your {target_minutes // 60}h target for the day! You have {overtime_mins // 60}h {overtime_mins % 60}m of overtime.')
+                st.success(f'You\'ve hit your {target_minutes // 60}h target for the day! You have {overtime_mins // 60}h {overtime_mins % 60}m of overtime.')
 
     else:
         st.info('No entries yet — add your first Clock In time above.')
