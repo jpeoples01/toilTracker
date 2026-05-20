@@ -297,6 +297,7 @@ with tab1:
     selected_date = date(int(sel[1]), list(calendar.month_name).index(sel[0]), 1)
     period_start, period_end, payday, num_weeks = get_pay_period(selected_date.year, selected_date.month)
 
+    # Pay period info card
     st.markdown(f"""
 <div style="display:flex; gap:2rem; margin: 0.5rem 0 0.75rem; padding: 0.75rem 1rem;
      border-left: 3px solid #E63946; background-color: rgba(230,57,70,0.08);
@@ -320,24 +321,37 @@ with tab1:
 </div>
 """, unsafe_allow_html=True)
 
-    st.markdown(RED_DIVIDER, unsafe_allow_html=True)
-
+    # Weekly hours entry in a bordered container with a header row.
+    # Labels appear once at the top instead of repeating on every input.
     hours        = []
     holiday_days = []
-    for i in range(num_weeks):
-        week_start = period_start + timedelta(weeks=i)
-        week_end   = week_start + timedelta(days=4)
-        col1, col2 = st.columns([3, 1])
-        col1.markdown(f'**Week {i + 1}** — {week_start.strftime("%d %b")} to {week_end.strftime("%d %b")}')
-        h  = col1.number_input('Hours worked', min_value=0.0, max_value=168.0, step=0.01,
-                               format='%.2f', key=f'month_week_{i}')
-        hd = col2.number_input('Holiday days', min_value=0, max_value=7, step=1,
-                               key=f'month_hols_{i}')
-        hours.append(h)
-        holiday_days.append(hd)
+    with st.container(border=True):
+        h1, h2, h3, h4 = st.columns([1, 2, 2, 1.3])
+        h1.markdown('**Week**')
+        h2.markdown('**Dates**')
+        h3.markdown('**Hours worked**')
+        h4.markdown('**Holiday days**')
 
-    if st.button('Calculate', key='monthly_calc'):
-        # Validate all inputs first; collect errors before stopping
+        for i in range(num_weeks):
+            week_start = period_start + timedelta(weeks=i)
+            week_end   = week_start + timedelta(days=4)
+            r1, r2, r3, r4 = st.columns([1, 2, 2, 1.3])
+            r1.markdown(f'**Week {i + 1}**')
+            r2.markdown(f'{week_start.strftime("%d %b")} - {week_end.strftime("%d %b")}')
+            h  = r3.number_input(
+                'Hours worked', min_value=0.0, max_value=168.0, step=0.01,
+                format='%.2f', key=f'month_week_{i}',
+                label_visibility='collapsed',
+            )
+            hd = r4.number_input(
+                'Holiday days', min_value=0, max_value=7, step=1,
+                key=f'month_hols_{i}',
+                label_visibility='collapsed',
+            )
+            hours.append(h)
+            holiday_days.append(hd)
+
+    if st.button('Calculate', key='monthly_calc', type='primary', use_container_width=True):
         valid = True
         converted = []
         for i, h in enumerate(hours):
@@ -351,46 +365,42 @@ with tab1:
             total_holiday_minutes = sum(hd * standard_day * 60 for hd in holiday_days)
             total_worked_minutes  = sum(converted)
             total_minutes         = total_worked_minutes + total_holiday_minutes
-
-            holiday_total_days = sum(holiday_days)
-            # Target = num_weeks × 40h, regardless of day pattern (both are 40h/week)
+            holiday_total_days    = sum(holiday_days)
             target_period_minutes = num_weeks * 40 * 60
-            left_minutes = target_period_minutes - total_minutes
+            left_minutes          = target_period_minutes - total_minutes
 
-            # Persist results in session_state so they survive reruns
             st.session_state['tab1_result'] = {
-                'total_minutes':        total_minutes,
-                'holiday_total_days':   holiday_total_days,
-                'left_minutes':         left_minutes,
+                'total_minutes':         total_minutes,
+                'holiday_total_days':    holiday_total_days,
+                'left_minutes':          left_minutes,
                 'target_period_minutes': target_period_minutes,
             }
 
-    # Display persisted result (survives widget interactions)
+    # Result displayed in its own container so it visually separates from inputs
     if 'tab1_result' in st.session_state:
         r = st.session_state['tab1_result']
-        st.markdown(RED_DIVIDER, unsafe_allow_html=True)
+        with st.container(border=True):
+            if r['holiday_total_days'] > 0:
+                st.info(
+                    f"Holiday hours added: {r['holiday_total_days']} day(s) "
+                    f"× {standard_day}h = {r['holiday_total_days'] * standard_day}h"
+                )
 
-        if r['holiday_total_days'] > 0:
-            st.info(
-                f"Holiday hours added: {r['holiday_total_days']} day(s) "
-                f"× {standard_day}h = {r['holiday_total_days'] * standard_day}h"
+            st.write(
+                f"**Total hours this period (worked + holiday):** "
+                f"{r['total_minutes'] // 60}h {r['total_minutes'] % 60}m"
             )
 
-        st.write(
-            f"**Total hours this period (worked + holiday):** "
-            f"{r['total_minutes'] // 60}h {r['total_minutes'] % 60}m"
-        )
-
-        if r['left_minutes'] > 0:
-            st.error(
-                f"You have {r['left_minutes'] // 60}h {r['left_minutes'] % 60}m "
-                f"left to work to reach full pay."
-            )
-        elif r['left_minutes'] == 0:
-            st.success('You have worked exactly your full hours this period!')
-        else:
-            ot = abs(r['left_minutes'])
-            st.success(f"You have {ot // 60}h {ot % 60}m of overtime this period!")
+            if r['left_minutes'] > 0:
+                st.error(
+                    f"You have {r['left_minutes'] // 60}h {r['left_minutes'] % 60}m "
+                    f"left to work to reach full pay."
+                )
+            elif r['left_minutes'] == 0:
+                st.success('You have worked exactly your full hours this period!')
+            else:
+                ot = abs(r['left_minutes'])
+                st.success(f"You have {ot // 60}h {ot % 60}m of overtime this period!")
 
 # ═════════════════════════════════════════════
 #  TAB 2 — Annual TOIL Accruement
@@ -409,116 +419,124 @@ with tab2:
         f'(e.g. {standard_day + 3}h+ worked in a day)'
     )
 
-    st.markdown(RED_DIVIDER, unsafe_allow_html=True)
-
     total_banked    = sum(e['overtime_hours'] for e in log['entries'])
     total_remaining = total_banked - log['hours_used']
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric('Hours banked',    f"{total_banked:.2f}h")
-    col2.metric('Hours used',      f"{log['hours_used']:.2f}h")
-    col3.metric('Hours remaining', f"{total_remaining:.2f}h")
-    st.caption(f"Equivalent to {total_banked / standard_day:.2f} days banked.")
-    st.caption(f"{total_remaining / standard_day:.2f} days remaining to take.")
+    # ─── Summary metrics ──────────────────────────────────────
+    with st.container(border=True):
+        col1, col2, col3 = st.columns(3)
+        col1.metric('Hours banked',    f"{total_banked:.2f}h")
+        col2.metric('Hours used',      f"{log['hours_used']:.2f}h")
+        col3.metric('Hours remaining', f"{total_remaining:.2f}h")
+        st.caption(
+            f"Equivalent to {total_banked / standard_day:.2f} days banked  •  "
+            f"{total_remaining / standard_day:.2f} days remaining to take"
+        )
 
-    st.markdown(RED_DIVIDER, unsafe_allow_html=True)
-    st.subheader('Log an overtime day')
+    # ─── Log an overtime day ──────────────────────────────────
+    with st.container(border=True):
+        st.subheader('Log an overtime day')
 
-    col_date, col_hours = st.columns([1, 1])
-    entry_date  = col_date.date_input('Date', value=date.today(), key='entry_date')
-    # Step 0.25 to allow quarter-hour precision (e.g. 11.25 = 11h 15m)
-    entry_hours = col_hours.number_input(
-        'Hours worked', min_value=0.0, max_value=24.0,
-        step=0.25, format='%.2f', key='entry_hours'
-    )
+        col_date, col_hours = st.columns([1, 1])
+        entry_date  = col_date.date_input('Date', value=date.today(), key='entry_date')
+        entry_hours = col_hours.number_input(
+            'Hours worked', min_value=0.0, max_value=24.0,
+            step=0.25, format='%.2f', key='entry_hours'
+        )
 
-    overtime = round(entry_hours - standard_day, 4)
-    if entry_hours > 0:
-        if overtime >= 3:
-            st.success(f'{overtime:.2f}h overtime — qualifies for annual TOIL pot')
-        elif overtime > 0:
-            st.info(f'{overtime:.2f}h overtime — below 3h threshold, counts toward monthly flexi only')
-        elif overtime == 0:
-            st.info('Exactly a standard day — no overtime')
-        else:
-            st.warning('Hours entered are below a standard day')
-
-    if st.button('Add to log', key='add_entry'):
-        if overtime >= 3:
-            entry_date_str = entry_date.strftime('%Y-%m-%d')
-            existing_dates = [e['date'] for e in log['entries']]
-            if entry_date_str in existing_dates:
-                st.error('An entry for this date already exists. Remove it first if you want to update it.')
+        overtime = round(entry_hours - standard_day, 4)
+        if entry_hours > 0:
+            if overtime >= 3:
+                st.success(f'{overtime:.2f}h overtime - qualifies for annual TOIL pot')
+            elif overtime > 0:
+                st.info(f'{overtime:.2f}h overtime - below 3h threshold, counts toward monthly flexi only')
+            elif overtime == 0:
+                st.info('Exactly a standard day - no overtime')
             else:
-                log['entries'].append({
-                    'date':           entry_date_str,
-                    'hours_worked':   entry_hours,
-                    'overtime_hours': overtime,
-                })
-                log['entries'].sort(key=lambda x: x['date'])
-                save_log(log)
-                st.rerun()
-        else:
-            st.error('This day does not meet the 3h overtime threshold for annual TOIL.')
+                st.warning('Hours entered are below a standard day')
 
-    st.markdown(RED_DIVIDER, unsafe_allow_html=True)
-    st.subheader('TOIL hours used')
+        if st.button('Add to log', key='add_entry', type='primary'):
+            if overtime >= 3:
+                entry_date_str = entry_date.strftime('%Y-%m-%d')
+                existing_dates = [e['date'] for e in log['entries']]
+                if entry_date_str in existing_dates:
+                    st.error('An entry for this date already exists. Remove it first if you want to update it.')
+                else:
+                    log['entries'].append({
+                        'date':           entry_date_str,
+                        'hours_worked':   entry_hours,
+                        'overtime_hours': overtime,
+                    })
+                    log['entries'].sort(key=lambda x: x['date'])
+                    save_log(log)
+                    st.rerun()
+            else:
+                st.error('This day does not meet the 3h overtime threshold for annual TOIL.')
 
-    hours_used_input = st.number_input(
-        'Total TOIL hours used this year', min_value=0.0, step=0.25,
-        value=float(log['hours_used']), key='hours_used_input'
-    )
-    if st.button('Update hours used', key='update_used'):
-        log['hours_used'] = hours_used_input
-        save_log(log)
-        st.rerun()
+    # ─── Log entries ──────────────────────────────────────────
+    with st.container(border=True):
+        st.subheader('Log')
 
-    st.markdown(RED_DIVIDER, unsafe_allow_html=True)
-    st.subheader('Log')
+        if log['entries']:
+            # Header row to label the columns once
+            h1, h2, h3, _ = st.columns([2, 2, 2, 0.5])
+            h1.caption('Date')
+            h2.caption('Hours worked')
+            h3.caption('TOIL accrued')
 
-    if log['entries']:
-        # Confirm-before-delete: store pending delete index in session_state
-        if 'pending_delete_toil' not in st.session_state:
-            st.session_state.pending_delete_toil = None
+            if 'pending_delete_toil' not in st.session_state:
+                st.session_state.pending_delete_toil = None
 
-        for i, entry in enumerate(log['entries']):
-            col_d, col_h, col_o, col_del = st.columns([2, 1.5, 1.5, 0.5])
-            col_d.write(entry['date'])
-            col_h.write(f"{entry['hours_worked']:.2f}h worked")
-            col_o.write(f"+{entry['overtime_hours']:.2f}h TOIL")
+            for i, entry in enumerate(log['entries']):
+                col_d, col_h, col_o, col_del = st.columns([2, 2, 2, 0.5])
+                col_d.write(entry['date'])
+                col_h.write(f"{entry['hours_worked']:.2f}h worked")
+                col_o.write(f"+{entry['overtime_hours']:.2f}h TOIL")
 
-            if st.session_state.pending_delete_toil == i:
-                # Show inline confirmation
-                col_del.markdown('&nbsp;', unsafe_allow_html=True)
-                conf_col1, conf_col2 = st.columns([1, 1])
-                with conf_col1:
-                    if st.button('Confirm delete', key=f'confirm_del_{i}', type='primary'):
+                if st.session_state.pending_delete_toil == i:
+                    col_del.markdown('&nbsp;', unsafe_allow_html=True)
+                    conf_col1, conf_col2 = st.columns([1, 1])
+                    if conf_col1.button('Confirm delete', key=f'confirm_del_{i}', type='primary'):
                         log['entries'].pop(i)
                         save_log(log)
                         st.session_state.pending_delete_toil = None
                         st.rerun()
-                with conf_col2:
-                    if st.button('Cancel', key=f'cancel_del_{i}'):
+                    if conf_col2.button('Cancel', key=f'cancel_del_{i}'):
                         st.session_state.pending_delete_toil = None
                         st.rerun()
-            else:
-                if col_del.button('✕', key=f'del_{i}'):
-                    st.session_state.pending_delete_toil = i
-                    st.rerun()
-    else:
-        st.info('No entries yet - log an overtime day above.')
+                else:
+                    if col_del.button('✕', key=f'del_{i}'):
+                        st.session_state.pending_delete_toil = i
+                        st.rerun()
+        else:
+            st.info('No entries yet - log an overtime day above.')
 
-    st.markdown(RED_DIVIDER, unsafe_allow_html=True)
+    # ─── TOIL hours used ──────────────────────────────────────
+    with st.container(border=True):
+        st.subheader('TOIL hours used')
 
+        col_input, col_button = st.columns([3, 1])
+        hours_used_input = col_input.number_input(
+            'Total TOIL hours used this year', min_value=0.0, step=0.25,
+            value=float(log['hours_used']), key='hours_used_input'
+        )
+        # Spacer to align the button vertically with the input
+        col_button.write('')
+        col_button.write('')
+        if col_button.button('Update hours used', key='update_used', use_container_width=True):
+            log['hours_used'] = hours_used_input
+            save_log(log)
+            st.rerun()
+
+    # ─── Destructive action, kept visually separate ───────────
+    st.write('')   # vertical breathing room
     if st.button('🗑 Clear all TOIL data', key='clear_log'):
-        if 'confirm_clear' not in st.session_state:
-            st.session_state.confirm_clear = False
         st.session_state.confirm_clear = True
 
     if st.session_state.get('confirm_clear'):
         st.warning('Are you sure? This will delete all logged entries and reset your hours used.')
         col_yes, col_no = st.columns([1, 1])
-        if col_yes.button('Yes, clear everything', key='confirm_yes'):
+        if col_yes.button('Yes, clear everything', key='confirm_yes', type='primary'):
             save_log({'entries': [], 'hours_used': 0.0, 'standard_day': standard_day})
             st.session_state.confirm_clear = False
             st.rerun()
