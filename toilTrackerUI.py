@@ -182,6 +182,97 @@ if work_pattern != clock_data.get('work_pattern'):
 st.markdown(RED_DIVIDER, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
+#  Live clock fragment
+#
+#  @st.fragment(run_every=60) tells Streamlit to re-execute ONLY this
+#  function every 60 seconds. The rest of the app — all three tabs and
+#  their widgets — is completely unaffected.
+#
+#  This replaces the old manual approach of checking
+#  st.session_state['last_refresh'] != now_london().minute and calling
+#  st.rerun(), which triggered a full app rerun every minute, made the
+#  UI unstable during tests, and wasted Streamlit server cycles.
+# ─────────────────────────────────────────────
+
+@st.fragment(run_every=60)
+def _live_metrics(events: list, target_mins: int):
+    """Render live worked-time metrics and finish-time message.
+
+    Reruns automatically every 60 seconds so elapsed time stays current
+    without touching the rest of the app.
+    """
+    minutes_worked   = 0
+    last_cin         = None
+    unpaired_cin_str = None
+
+    for event in events:
+        t = int(event['time'].split(':')[0]) * 60 + int(event['time'].split(':')[1])
+        if event['type'] == 'Clock In':
+            last_cin = t
+        elif event['type'] == 'Clock Out' and last_cin is not None:
+            minutes_worked += t - last_cin
+            last_cin = None
+
+    if last_cin is not None:
+        for event in reversed(events):
+            if event['type'] == 'Clock In':
+                unpaired_cin_str = event['time']
+                break
+
+    now_total = now_london().hour * 60 + now_london().minute
+
+    if unpaired_cin_str is not None:
+        cin_parts    = unpaired_cin_str.split(':')
+        cin_total    = int(cin_parts[0]) * 60 + int(cin_parts[1])
+        live_elapsed = max(now_total - cin_total, 0)
+    else:
+        live_elapsed = 0
+
+    live_minutes_worked    = minutes_worked + live_elapsed
+    live_minutes_remaining = target_mins - live_minutes_worked
+    hours_done = live_minutes_worked // 60
+    mins_done  = live_minutes_worked % 60
+
+    col_m1, col_m2, col_m3 = st.columns(3)
+    col_m1.metric('Hours worked', f'{hours_done}h {mins_done}m')
+    col_m2.metric('Target',       f'{target_mins // 60}h 00m')
+    col_m3.metric('Remaining',    f'{max(live_minutes_remaining, 0) // 60}h {max(live_minutes_remaining, 0) % 60}m')
+
+    st.markdown(RED_DIVIDER, unsafe_allow_html=True)
+
+    if unpaired_cin_str is not None:
+        # Finish time is fixed from the moment you clocked in
+        cin_parts_fin            = unpaired_cin_str.split(':')
+        cin_total_fin            = int(cin_parts_fin[0]) * 60 + int(cin_parts_fin[1])
+        minutes_still_needed     = target_mins - minutes_worked
+        finish_minutes           = cin_total_fin + minutes_still_needed
+
+        if live_minutes_remaining > 0:
+            st.success(f'Finish time: **{minutes_to_time_str(finish_minutes)}**')
+        else:
+            ot = abs(live_minutes_remaining)
+            st.success(
+                f"You've hit your {target_mins // 60}h target! "
+                f"{ot // 60}h {ot % 60}m overtime so far today."
+            )
+    else:
+        # Clocked out — projected finish updates as time passes
+        if live_minutes_remaining > 0:
+            projected_finish = now_total + live_minutes_remaining
+            st.info(
+                f'You have {live_minutes_remaining // 60}h {live_minutes_remaining % 60}m left to work. '
+                f'If you clock back in now, you\'ll finish around '
+                f'**{minutes_to_time_str(projected_finish)}**.'
+            )
+        else:
+            ot = abs(live_minutes_remaining)
+            st.success(
+                f"You've hit your {target_mins // 60}h target for the day! "
+                f"{ot // 60}h {ot % 60}m of overtime."
+            )
+
+
+# ─────────────────────────────────────────────
 #  Tabs
 # ─────────────────────────────────────────────
 
@@ -494,85 +585,9 @@ with tab3:
 
         st.markdown(RED_DIVIDER, unsafe_allow_html=True)
 
-        # ── Calculate worked time from paired Clock In / Clock Out events ──
-        minutes_worked  = 0
-        last_cin        = None
-        unpaired_cin_str = None
-
-        for event in events:
-            t = int(event['time'].split(':')[0]) * 60 + int(event['time'].split(':')[1])
-            if event['type'] == 'Clock In':
-                last_cin = t
-            elif event['type'] == 'Clock Out' and last_cin is not None:
-                minutes_worked += t - last_cin
-                last_cin = None
-
-        if last_cin is not None:
-            # Currently clocked in — find the last Clock In time string
-            for event in reversed(events):
-                if event['type'] == 'Clock In':
-                    unpaired_cin_str = event['time']
-                    break
-
-        now_total = now_london().hour * 60 + now_london().minute
-
-        if unpaired_cin_str is not None:
-            cin_parts    = unpaired_cin_str.split(':')
-            cin_total    = int(cin_parts[0]) * 60 + int(cin_parts[1])
-            live_elapsed = max(now_total - cin_total, 0)
-        else:
-            cin_total    = None
-            live_elapsed = 0
-
-        live_minutes_worked    = minutes_worked + live_elapsed
-        live_minutes_remaining = target_minutes - live_minutes_worked
-
-        hours_done = live_minutes_worked // 60
-        mins_done  = live_minutes_worked % 60
-
-        col_m1, col_m2, col_m3 = st.columns(3)
-        col_m1.metric('Hours worked', f'{hours_done}h {mins_done}m')
-        col_m2.metric('Target',       f'{target_minutes // 60}h 00m')
-        col_m3.metric('Remaining',    f'{max(live_minutes_remaining, 0) // 60}h {max(live_minutes_remaining, 0) % 60}m')
-
-        st.markdown(RED_DIVIDER, unsafe_allow_html=True)
-
-        if unpaired_cin_str is not None:
-            # Clocked in: finish time = clock-in time + hours still needed at that point
-            # (This is a fixed wall-clock time that doesn't drift as you work)
-            cin_parts_fin = unpaired_cin_str.split(':')
-            cin_total_fin = int(cin_parts_fin[0]) * 60 + int(cin_parts_fin[1])
-            minutes_still_needed_at_cin = target_minutes - minutes_worked
-            finish_minutes = cin_total_fin + minutes_still_needed_at_cin
-
-            if live_minutes_remaining > 0:
-                st.success(f'Finish time: **{minutes_to_time_str(finish_minutes)}**')
-            else:
-                ot = abs(live_minutes_remaining)
-                st.success(
-                    f"You've hit your {target_minutes // 60}h target! "
-                    f"{ot // 60}h {ot % 60}m overtime so far today."
-                )
-        else:
-            # Clocked out: show calculated finish time based on clocking back in now
-            if live_minutes_remaining > 0:
-                projected_finish = now_total + live_minutes_remaining
-                st.info(
-                    f'You have {live_minutes_remaining // 60}h {live_minutes_remaining % 60}m left to work. '
-                    f'If you clock back in now, you\'ll finish around **{minutes_to_time_str(projected_finish)}**.'
-                )
-            else:
-                ot = abs(live_minutes_remaining)
-                st.success(
-                    f"You've hit your {target_minutes // 60}h target for the day! "
-                    f"{ot // 60}h {ot % 60}m of overtime."
-                )
-
-        # ── Auto-refresh while clocked in (session_state only — no meta refresh) ──
-        if unpaired_cin_str is not None:
-            if st.session_state.get('last_refresh') != now_london().minute:
-                st.session_state['last_refresh'] = now_london().minute
-                st.rerun()
+        # Fragment handles all live calculations and auto-reruns every 60s.
+        # No session_state minute-tracking or manual st.rerun() needed.
+        _live_metrics(events, target_minutes)
 
     else:
         st.info("No entries yet - add your first Clock In time above.")

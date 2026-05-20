@@ -31,26 +31,26 @@ def get_current_expected_period():
 
 def test_pay_period_display(page):
     page.get_by_text("Pay period", exact=True).first.scroll_into_view_if_needed()
-    assert page.get_by_text("PERIOD START", exact=False).is_visible()
-    assert page.get_by_text("PERIOD END", exact=False).is_visible()
-    assert page.get_by_text("PAYDAY", exact=False).is_visible()
-    assert page.get_by_text("WEEKS", exact=False).is_visible()
+    page.get_by_text("PERIOD START", exact=False).wait_for(state="visible", timeout=5000)
+    page.get_by_text("PERIOD END", exact=False).wait_for(state="visible", timeout=5000)
+    page.get_by_text("PAYDAY", exact=False).wait_for(state="visible", timeout=5000)
+    page.get_by_text("WEEKS", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_pay_period_section_has_red_border(page):
     # check the styled container is present
-    assert page.locator("div[style*='border-left']").first.is_visible()
+    page.locator("div[style*='border-left']").first.wait_for(state="visible", timeout=5000)
 
 
 def test_month_selector_visible(page):
-    assert page.get_by_label("Select pay period month").is_visible()
+    page.get_by_label("Select pay period month").wait_for(state="visible", timeout=5000)
 
 
 def test_month_selector_defaults_to_current_month(page):
     today = date.today()
     current_month = today.strftime("%B %Y")
     # find the rendered selectbox value by looking for the month text on the page
-    assert page.get_by_text(current_month, exact=False).first.is_visible()
+    page.get_by_text(current_month, exact=False).first.wait_for(state="visible", timeout=5000)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -76,26 +76,26 @@ def test_weeks_matches_expected_for_current_month(page):
 def test_period_start_date_correct(page):
     expected_start, _, _, _ = get_current_expected_period()
     expected_str = expected_start.strftime("%d %b %Y")
-    assert page.get_by_text(expected_str, exact=False).is_visible()
+    page.get_by_text(expected_str, exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_period_end_date_correct(page):
     _, expected_end, _, _ = get_current_expected_period()
     expected_str = expected_end.strftime("%d %b %Y")
-    assert page.get_by_text(expected_str, exact=False).is_visible()
+    page.get_by_text(expected_str, exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_payday_date_correct(page):
     _, _, expected_payday, _ = get_current_expected_period()
     expected_str = expected_payday.strftime("%d %b %Y")
-    assert page.get_by_text(expected_str, exact=False).is_visible()
+    page.get_by_text(expected_str, exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_payday_is_last_friday_of_month(page):
     today = date.today()
     expected_payday = last_friday_of_month(today.year, today.month)
     expected_str = expected_payday.strftime("%d %b %Y")
-    assert page.get_by_text(expected_str, exact=False).is_visible()
+    page.get_by_text(expected_str, exact=False).wait_for(state="visible", timeout=5000)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -108,8 +108,8 @@ def test_month_selector_changes_period(page):
     page.wait_for_timeout(500)
     page.get_by_role("option").nth(1).click()
     page.wait_for_timeout(1000)
-    assert page.get_by_text("PERIOD START", exact=False).is_visible()
-    assert page.get_by_text("PERIOD END", exact=False).is_visible()
+    page.get_by_text("PERIOD START", exact=False).wait_for(state="visible", timeout=5000)
+    page.get_by_text("PERIOD END", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_changing_month_updates_week_inputs(page):

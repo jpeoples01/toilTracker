@@ -2,7 +2,7 @@
 
 
 def switch_to_annual_tab(page):
-    assert page.get_by_text("TOIL MONTHLY TRACKER").is_visible()
+    page.get_by_text("TOIL MONTHLY TRACKER").wait_for(state="visible", timeout=5000)
     page.get_by_text("TOIL ANNUAL LEAVE ACCRUEMENT").click()
     page.wait_for_timeout(1000)
 
@@ -39,9 +39,9 @@ def confirm_delete(page):
 
 def test_annual_tab_metrics_visible(page):
     switch_to_annual_tab(page)
-    assert page.get_by_text("Hours banked").is_visible()
-    assert page.get_by_text("Hours used", exact=True).first.is_visible()
-    assert page.get_by_text("Hours remaining").is_visible()
+    page.get_by_text("Hours banked").wait_for(state="visible", timeout=5000)
+    page.get_by_text("Hours used", exact=True).first.wait_for(state="visible", timeout=5000)
+    page.get_by_text("Hours remaining").wait_for(state="visible", timeout=5000)
 
 
 def test_annual_default_working_pattern(page):
@@ -57,32 +57,32 @@ def test_annual_unselected_working_pattern(page):
 
 def test_qualification_caption_visible(page):
     switch_to_annual_tab(page)
-    assert page.get_by_text("Qualification for Annual TOIL", exact=False).is_visible()
+    page.get_by_text("Qualification for Annual TOIL", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_qualification_caption_shows_8h_threshold(page):
     switch_to_annual_tab(page)
-    assert page.get_by_text("8h work day with 3h+ overtime", exact=False).is_visible()
+    page.get_by_text("8h work day with 3h+ overtime", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_log_overtime_subheader_visible(page):
     switch_to_annual_tab(page)
-    assert page.get_by_text("Log an overtime day", exact=True).is_visible()
+    page.get_by_text("Log an overtime day", exact=True).wait_for(state="visible", timeout=5000)
 
 
 def test_toil_hours_used_subheader_visible(page):
     switch_to_annual_tab(page)
-    assert page.get_by_role("heading").filter(has_text="TOIL hours used").is_visible()
+    page.get_by_role("heading").filter(has_text="TOIL hours used").wait_for(state="visible", timeout=5000)
 
 
 def test_log_subheader_visible(page):
     switch_to_annual_tab(page)
-    assert page.get_by_text("Log", exact=True).first.is_visible()
+    page.get_by_text("Log", exact=True).first.wait_for(state="visible", timeout=5000)
 
 
 def test_log_empty_message(page):
     switch_to_annual_tab(page)
-    assert page.get_by_text("No entries yet - log an overtime day above.", exact=True).is_visible()
+    page.get_by_text("No entries yet - log an overtime day above.", exact=True).wait_for(state="visible", timeout=5000)
 
 
 def test_initial_metrics_are_zero(page):
@@ -95,14 +95,14 @@ def test_initial_metrics_are_zero(page):
 
 def test_days_equivalent_captions_visible(page):
     switch_to_annual_tab(page)
-    assert page.get_by_text("days banked", exact=False).is_visible()
+    page.get_by_text("days banked", exact=False).wait_for(state="visible", timeout=5000)
     # Caption wording changed from "days left to take" → "days remaining to take"
-    assert page.get_by_text("days remaining to take", exact=False).is_visible()
+    page.get_by_text("days remaining to take", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_clear_all_button_visible(page):
     switch_to_annual_tab(page)
-    assert page.get_by_text("Clear all TOIL data", exact=False).is_visible()
+    page.get_by_text("Clear all TOIL data", exact=False).wait_for(state="visible", timeout=5000)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -112,20 +112,20 @@ def test_clear_all_button_visible(page):
 def test_preview_qualifies_annual_toil(page):
     switch_to_annual_tab(page)
     enter_hours_worked(page, "12")
-    assert page.get_by_text("qualifies for annual TOIL pot", exact=False).is_visible()
+    page.get_by_text("qualifies for annual TOIL pot", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_preview_below_threshold_shows_flexi(page):
     switch_to_annual_tab(page)
     enter_hours_worked(page, "10")
-    assert page.get_by_text("below 3h threshold, counts toward monthly flexi only", exact=False).is_visible()
+    page.get_by_text("below 3h threshold, counts toward monthly flexi only", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_preview_standard_day_shows_no_overtime(page):
     switch_to_annual_tab(page)
     enter_hours_worked(page, "8")
     # Message changed from "No overtime on this day" → "Exactly a standard day — no overtime"
-    assert page.get_by_text("Exactly a standard day", exact=False).is_visible()
+    page.get_by_text("Exactly a standard day", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_preview_zero_hours_no_message(page):
@@ -144,14 +144,14 @@ def test_add_valid_overtime_entry(page):
     enter_hours_worked(page, "12")
     click_add_to_log(page)
     # Log entries now render with .2f precision
-    assert page.get_by_text("12.00h worked", exact=False).is_visible()
+    page.get_by_text("12.00h worked", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_added_entry_shows_toil_hours(page):
     switch_to_annual_tab(page)
     enter_hours_worked(page, "12")
     click_add_to_log(page)
-    assert page.get_by_text("+4.00h TOIL", exact=False).is_visible()
+    page.get_by_text("+4.00h TOIL", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_metrics_update_after_entry(page):
@@ -165,21 +165,21 @@ def test_reject_below_threshold_overtime(page):
     switch_to_annual_tab(page)
     enter_hours_worked(page, "9")
     click_add_to_log(page)
-    assert page.get_by_text("does not meet the 3h overtime threshold", exact=False).is_visible()
+    page.get_by_text("does not meet the 3h overtime threshold", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_reject_exact_standard_day_hours(page):
     switch_to_annual_tab(page)
     enter_hours_worked(page, "8")
     click_add_to_log(page)
-    assert page.get_by_text("does not meet the 3h overtime threshold", exact=False).is_visible()
+    page.get_by_text("does not meet the 3h overtime threshold", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_entry_not_added_when_rejected(page):
     switch_to_annual_tab(page)
     enter_hours_worked(page, "9")
     click_add_to_log(page)
-    assert page.get_by_text("No entries yet - log an overtime day above.", exact=True).is_visible()
+    page.get_by_text("No entries yet - log an overtime day above.", exact=True).wait_for(state="visible", timeout=5000)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -213,8 +213,8 @@ def test_delete_entry_shows_confirmation(page):
     click_add_to_log(page)
     page.locator("button", has_text="\u2715").first.click()
     page.wait_for_timeout(1000)
-    assert page.get_by_text("Confirm delete").is_visible()
-    assert page.get_by_text("Cancel").first.is_visible()
+    page.get_by_text("Confirm delete").wait_for(state="visible", timeout=5000)
+    page.get_by_text("Cancel").first.wait_for(state="visible", timeout=5000)
 
 
 def test_delete_entry_cancel_preserves_entry(page):
@@ -225,18 +225,18 @@ def test_delete_entry_cancel_preserves_entry(page):
     page.wait_for_timeout(1000)
     page.get_by_text("Cancel").first.click()
     page.wait_for_timeout(1000)
-    assert page.get_by_text("12.00h worked", exact=False).is_visible()
+    page.get_by_text("12.00h worked", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_delete_entry(page):
     switch_to_annual_tab(page)
     enter_hours_worked(page, "12")
     click_add_to_log(page)
-    assert page.get_by_text("12.00h worked", exact=False).is_visible()
+    page.get_by_text("12.00h worked", exact=False).wait_for(state="visible", timeout=5000)
     page.locator("button", has_text="\u2715").first.click()
     page.wait_for_timeout(1000)
     confirm_delete(page)
-    assert page.get_by_text("No entries yet - log an overtime day above.", exact=True).is_visible()
+    page.get_by_text("No entries yet - log an overtime day above.", exact=True).wait_for(state="visible", timeout=5000)
 
 
 def test_delete_entry_updates_metrics(page):
@@ -257,9 +257,9 @@ def test_clear_all_shows_confirmation(page):
     switch_to_annual_tab(page)
     page.get_by_text("Clear all TOIL data").click()
     page.wait_for_timeout(1000)
-    assert page.get_by_text("Are you sure?", exact=False).is_visible()
-    assert page.get_by_text("Yes, clear everything", exact=False).is_visible()
-    assert page.get_by_text("Cancel", exact=True).first.is_visible()
+    page.get_by_text("Are you sure?", exact=False).wait_for(state="visible", timeout=5000)
+    page.get_by_text("Yes, clear everything", exact=False).wait_for(state="visible", timeout=5000)
+    page.get_by_text("Cancel", exact=True).first.wait_for(state="visible", timeout=5000)
 
 
 def test_clear_all_cancel_preserves_data(page):
@@ -270,7 +270,7 @@ def test_clear_all_cancel_preserves_data(page):
     page.wait_for_timeout(1000)
     page.get_by_text("Cancel", exact=True).first.click()
     page.wait_for_timeout(1500)
-    assert page.get_by_text("12.00h worked", exact=False).is_visible()
+    page.get_by_text("12.00h worked", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_clear_all_confirm_resets_data(page):
@@ -281,7 +281,7 @@ def test_clear_all_confirm_resets_data(page):
     page.wait_for_timeout(1000)
     page.get_by_text("Yes, clear everything").click()
     page.wait_for_timeout(1500)
-    assert page.get_by_text("No entries yet - log an overtime day above.", exact=True).is_visible()
+    page.get_by_text("No entries yet - log an overtime day above.", exact=True).wait_for(state="visible", timeout=5000)
 
 
 def test_clear_all_resets_metrics(page):
@@ -306,7 +306,7 @@ def test_clear_all_resets_metrics(page):
 def test_switch_to_4_day_updates_caption(page):
     switch_to_annual_tab(page)
     click_4_day_radio(page)
-    assert page.get_by_text("10h work day with 3h+ overtime", exact=False).is_visible()
+    page.get_by_text("10h work day with 3h+ overtime", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_4_day_pattern_rejects_12h_as_below_threshold(page):
@@ -314,7 +314,7 @@ def test_4_day_pattern_rejects_12h_as_below_threshold(page):
     click_4_day_radio(page)
     enter_hours_worked(page, "12")
     click_add_to_log(page)
-    assert page.get_by_text("does not meet the 3h overtime threshold", exact=False).is_visible()
+    page.get_by_text("does not meet the 3h overtime threshold", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_4_day_pattern_accepts_14h(page):
@@ -322,4 +322,4 @@ def test_4_day_pattern_accepts_14h(page):
     click_4_day_radio(page)
     enter_hours_worked(page, "14")
     click_add_to_log(page)
-    assert page.get_by_text("14.00h worked", exact=False).is_visible()
+    page.get_by_text("14.00h worked", exact=False).wait_for(state="visible", timeout=5000)
