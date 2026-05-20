@@ -30,8 +30,8 @@ def get_num_weeks(page):
 
 
 def click_4_day_radio(page):
-    # Streamlit hides the <input> — click the visible label text instead
-    page.get_by_text("4 days / 40 hours", exact=True).first.click()
+    # Shared radio at top of page — use full label text to match exactly
+    page.get_by_text("4 days / 40 hours (10h day)", exact=True).first.click()
     page.wait_for_timeout(1500)
 
 
@@ -48,12 +48,13 @@ def test_monthly_tab_is_default(page):
 
 
 def test_monthly_default_working_pattern(page):
-    radio = page.get_by_label("5 days / 40 hours").first
+    # Shared radio — partial label match still works
+    radio = page.get_by_label("5 days / 40 hours (8h day)").first
     assert radio.is_checked()
 
 
 def test_monthly_unselected_working_pattern(page):
-    radio = page.get_by_label("4 days / 40 hours").first
+    radio = page.get_by_label("4 days / 40 hours (10h day)").first
     assert not radio.is_checked()
 
 
@@ -85,7 +86,7 @@ def test_holiday_days_inputs_present(page):
 
 
 def test_hours_and_holiday_inputs_count_match(page):
-    hours_count = get_num_weeks(page)
+    hours_count   = get_num_weeks(page)
     holiday_count = page.get_by_label("Holiday days").count()
     assert hours_count == holiday_count
 
@@ -97,7 +98,8 @@ def test_hours_and_holiday_inputs_count_match(page):
 def test_enter_hours_and_calculate(page):
     page.locator("input[aria-label='Hours worked'][max='168']").first.fill("40")
     click_calculate(page)
-    assert page.get_by_text("Total hours this month", exact=False).is_visible()
+    # Label changed from "Total hours this month" → "Total hours this period"
+    assert page.get_by_text("Total hours this period", exact=False).is_visible()
 
 
 def test_exact_hours_shows_success(page):
@@ -105,13 +107,15 @@ def test_exact_hours_shows_success(page):
     for i in range(num_weeks):
         fill_week_hours(page, i, "40")
     click_calculate(page)
-    assert page.get_by_text("You have worked exactly your full hours this month", exact=False).is_visible()
+    # "this month" → "this period"
+    assert page.get_by_text("You have worked exactly your full hours this period", exact=False).is_visible()
 
 
 def test_under_hours_shows_deficit(page):
     fill_week_hours(page, 0, "30")
     click_calculate(page)
-    assert page.get_by_text("left to work to get full pay", exact=False).is_visible()
+    # "get full pay" → "reach full pay"
+    assert page.get_by_text("left to work to reach full pay", exact=False).is_visible()
 
 
 def test_monthly_overtime_message(page):
@@ -119,7 +123,8 @@ def test_monthly_overtime_message(page):
     for i in range(num_weeks):
         fill_week_hours(page, i, "50")
     click_calculate(page)
-    assert page.get_by_text("overtime this month", exact=False).is_visible()
+    # "overtime this month" → "overtime this period"
+    assert page.get_by_text("overtime this period", exact=False).is_visible()
 
 
 # ──────────────────────────────────────────────────────────────
@@ -131,20 +136,21 @@ def test_single_week_40h_shows_deficit(page):
     fill_week_hours(page, 0, "40")
     click_calculate(page)
     if num_weeks > 1:
-        assert page.get_by_text("left to work to get full pay", exact=False).is_visible()
+        assert page.get_by_text("left to work to reach full pay", exact=False).is_visible()
     else:
         assert page.get_by_text("You have worked exactly your full hours", exact=False).is_visible()
 
 
 def test_zero_hours_shows_full_deficit(page):
     click_calculate(page)
-    assert page.get_by_text("left to work to get full pay", exact=False).is_visible()
+    assert page.get_by_text("left to work to reach full pay", exact=False).is_visible()
 
 
 def test_total_hours_displayed_correctly(page):
     fill_week_hours(page, 0, "35")
     click_calculate(page)
-    assert page.get_by_text("35 hours and 0 minutes", exact=False).is_visible()
+    # Format changed from "35 hours and 0 minutes" → "35h 0m"
+    assert page.get_by_text("35h 0m", exact=False).is_visible()
 
 
 # ──────────────────────────────────────────────────────────────
@@ -154,7 +160,8 @@ def test_total_hours_displayed_correctly(page):
 def test_decimal_hours_calculated_correctly(page):
     fill_week_hours(page, 0, "37.30")
     click_calculate(page)
-    assert page.get_by_text("37 hours and 30 minutes", exact=False).is_visible()
+    # Format changed from "37 hours and 30 minutes" → "37h 30m"
+    assert page.get_by_text("37h 30m", exact=False).is_visible()
 
 
 # ──────────────────────────────────────────────────────────────
@@ -171,7 +178,7 @@ def test_holiday_days_add_to_total(page):
     fill_week_hours(page, 0, "32")
     fill_holiday_days(page, 0, "1")
     click_calculate(page)
-    assert page.get_by_text("40 hours and 0 minutes", exact=False).is_visible()
+    assert page.get_by_text("40h 0m", exact=False).is_visible()
 
 
 def test_holiday_info_shows_correct_calculation(page):
@@ -192,7 +199,7 @@ def test_no_holidays_no_info_message(page):
 
 def test_switch_to_4_day_pattern(page):
     click_4_day_radio(page)
-    radio = page.get_by_label("4 days / 40 hours").first
+    radio = page.get_by_label("4 days / 40 hours (10h day)").first
     assert radio.is_checked()
 
 
@@ -211,11 +218,12 @@ def test_multiple_weeks_total_correct(page):
     fill_week_hours(page, 0, "40")
     fill_week_hours(page, 1, "40")
     click_calculate(page)
-    assert page.get_by_text("80 hours and 0 minutes", exact=False).is_visible()
+    # Format changed from "80 hours and 0 minutes" → "80h 0m"
+    assert page.get_by_text("80h 0m", exact=False).is_visible()
 
 
 def test_mixed_hours_across_weeks(page):
     fill_week_hours(page, 0, "35")
     fill_week_hours(page, 1, "45")
     click_calculate(page)
-    assert page.get_by_text("80 hours and 0 minutes", exact=False).is_visible()
+    assert page.get_by_text("80h 0m", exact=False).is_visible()

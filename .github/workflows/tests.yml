@@ -20,28 +20,34 @@ jobs:
 
       - name: Install dependencies
         run: |
-              pip install -r requirements.txt
-              pip install pytest-xdist pytest-timeout allure-pytest
-              playwright install chromium
-              playwright install-deps chromium
+          pip install -r requirements.txt
+          pip install pytest-xdist pytest-timeout pytest-html
 
-      - name: Install Allure CLI
+      - name: Install Playwright
         run: |
-              sudo apt-get update
-              sudo apt-get install -y allure
+          playwright install chromium
+          playwright install-deps chromium
 
       - name: Run tests
         run: |
-              pytest -n 2 --timeout=600 --alluredir=reports
+          pytest -n 2 --timeout=600 \
+            --junitxml=reports/junit.xml \
+            --html=reports/report.html \
+            --self-contained-html
 
-      - name: Generate Allure report
+      # Renders pass/fail results inline on the PR check — no download needed
+      - name: Publish test results
         if: always()
-        run: |
-              allure generate reports -o reports/html --clean
+        uses: dorny/test-reporter@v1
+        with:
+          name: Playwright Tests
+          path: reports/junit.xml
+          reporter: java-junit
 
-      - name: Upload Allure report
+      # Full HTML report (includes screenshots on failure) as a downloadable artifact
+      - name: Upload HTML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-           name: allure-report
-           path: reports/html
+          name: test-report
+          path: reports/

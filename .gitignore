@@ -1,9 +1,7 @@
 # App data files (local state, not for version control)
 # Ignore test-generated state files
-toil_log_*.json
-clock_log_*.json
-toil_log.json
-clock_log.json
+dataLogs/
+testLogs/
 ``
 # Python
 __pycache__/

@@ -1,10 +1,21 @@
 # test_hours_today.py
 
 
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+
+def _now_hhmm(offset_minutes=0):
+    """Current London time offset by the given number of minutes."""
+    t = datetime.now(ZoneInfo('Europe/London')) + timedelta(minutes=offset_minutes)
+    return t.strftime('%H:%M')
+
+
 def switch_to_hours_today_tab(page):
     assert page.get_by_text("TOIL MONTHLY TRACKER").is_visible()
     page.get_by_role("tab", name="Hours Today").click()
-    page.wait_for_timeout(2000)
+    # Wait for actual tab content rather than a fixed sleep
+    page.locator("input[aria-label$='time']").wait_for(state="visible", timeout=5000)
 
 
 def enter_clock_event(page, time_str):
@@ -18,7 +29,7 @@ def enter_clock_event(page, time_str):
 
 def click_clock_button(page):
     page.locator("button:has-text('Clock In'), button:has-text('Clock Out')").first.click()
-    page.wait_for_timeout(1500)
+    page.wait_for_timeout(3000)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -36,15 +47,14 @@ def test_hours_today_subheader_visible(page):
 
 
 def test_hours_today_default_working_pattern(page):
-    switch_to_hours_today_tab(page)
-    # 5-day is the default so it SHOULD be checked
+    # Shared radio at top of page — single instance, no tab-specific index
     radio = page.get_by_label("5 days / 40 hours (8h day)").first
     assert radio.is_checked()
 
 
 def test_empty_state_shows_no_entries_message(page):
     switch_to_hours_today_tab(page)
-    assert page.get_by_text("No entries yet — add your first Clock In", exact=False).is_visible()
+    assert page.get_by_text("No entries yet - add your first Clock In", exact=False).is_visible()
 
 
 def test_first_action_is_clock_in(page):
@@ -149,13 +159,13 @@ def test_target_shows_8h_for_default_pattern(page):
     assert page.locator('[data-testid="stMetric"]').filter(has_text="Target").filter(has_text="8h").first.is_visible()
 
 
-def test_hours_worked_zero_when_only_clocked_in(page):
+def test_hours_worked_after_clock_out(page):
     switch_to_hours_today_tab(page)
     enter_clock_event(page, "08:00")
     click_clock_button(page)
     enter_clock_event(page, "12:00")
     click_clock_button(page)
-    assert page.locator('[data-testid="stMetric"]').filter(has_text="Hours worked").filter(has_text="4h 0m").first.is_visible()
+    page.locator('[data-testid="stMetric"]').filter(has_text="Hours worked").filter(has_text="4h 0m").first.wait_for(state="visible", timeout=8000)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -164,18 +174,22 @@ def test_hours_worked_zero_when_only_clocked_in(page):
 
 def test_finish_time_shown_when_clocked_in(page):
     switch_to_hours_today_tab(page)
-    enter_clock_event(page, "08:00")
+    # Use a time 30 minutes ago so live_minutes_remaining is always positive
+    # regardless of when the test runs. Hardcoding "08:00" breaks in the
+    # afternoon because the app calculates live_elapsed = now - cin_time,
+    # and once that exceeds the 8h target it shows overtime instead.
+    enter_clock_event(page, _now_hhmm(-30))
     click_clock_button(page)
-    assert page.get_by_text("You can clock out for the day at", exact=False).is_visible()
+    page.get_by_text("Finish time:", exact=False).wait_for(state="visible", timeout=10000)
 
 
-def test_remaining_shows_clock_back_in_hint(page):
+def test_clocked_out_shows_projected_finish(page):
     switch_to_hours_today_tab(page)
     enter_clock_event(page, "08:00")
     click_clock_button(page)
     enter_clock_event(page, "12:00")
     click_clock_button(page)
-    assert page.get_by_text("Clock back in to see your finish time", exact=False).is_visible()
+    page.get_by_text("If you clock back in now", exact=False).wait_for(state="visible", timeout=8000)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -184,18 +198,18 @@ def test_remaining_shows_clock_back_in_hint(page):
 
 def test_reject_clock_event_before_previous(page):
     switch_to_hours_today_tab(page)
-    enter_clock_event(page, "09:00")
+    enter_clock_event(page, _now_hhmm(-60))
     click_clock_button(page)
-    enter_clock_event(page, "08:00")
+    enter_clock_event(page, _now_hhmm(-90))
     click_clock_button(page)
     assert page.get_by_text("must be after the previous entry", exact=False).is_visible()
 
 
 def test_reject_clock_event_equal_to_previous(page):
     switch_to_hours_today_tab(page)
-    enter_clock_event(page, "09:00")
+    enter_clock_event(page, _now_hhmm(-60))
     click_clock_button(page)
-    enter_clock_event(page, "09:00")
+    enter_clock_event(page, _now_hhmm(-60))
     click_clock_button(page)
     assert page.get_by_text("must be after the previous entry", exact=False).is_visible()
 
@@ -222,24 +236,26 @@ def test_overtime_message_shown_after_target_met(page):
     click_clock_button(page)
     enter_clock_event(page, "16:30")
     click_clock_button(page)
-    # 8.5 hours = 30m overtime
-    assert page.get_by_text("target for the day", exact=False).is_visible()
+    # 8h 30m worked = 30m overtime
+    page.get_by_text("target for the day", exact=False).wait_for(state="visible", timeout=8000)
 
 
-def test_overtime_over_3h_shows_toil_qualification(page):
+def test_overtime_amount_shown_correctly(page):
     switch_to_hours_today_tab(page)
     enter_clock_event(page, "08:00")
     click_clock_button(page)
     enter_clock_event(page, "19:30")
     click_clock_button(page)
-    assert page.get_by_text("3h 30m of overtime", exact=False).is_visible()
+    # 11h 30m worked = 3h 30m overtime
+    page.get_by_text("3h 30m of overtime", exact=False).wait_for(state="visible", timeout=8000)
 
 
-def test_overtime_under_3h_no_toil_qualification(page):
+def test_no_toil_qualification_message_in_hours_today(page):
+    # Hours Today tab never shows TOIL qualification - that lives in the annual tab
     switch_to_hours_today_tab(page)
     enter_clock_event(page, "08:00")
     click_clock_button(page)
-    enter_clock_event(page, "16:30")
+    enter_clock_event(page, "19:30")
     click_clock_button(page)
     assert not page.get_by_text("qualifies for annual TOIL pot", exact=False).is_visible()
 
@@ -254,18 +270,16 @@ def test_delete_entry(page):
     click_clock_button(page)
     assert page.get_by_text("08:00").is_visible()
     page.locator("button").filter(has_text="\u2715").first.click()
-    page.wait_for_timeout(1000)
-    assert page.get_by_text("No entries yet — add your first Clock In", exact=False).is_visible()
+    page.get_by_text("No entries yet - add your first Clock In", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_delete_restores_clock_in_action(page):
     switch_to_hours_today_tab(page)
     enter_clock_event(page, "08:00")
     click_clock_button(page)
-    assert page.get_by_role("button", name="Clock Out").is_visible()
+    page.get_by_role("button", name="Clock Out").wait_for(state="visible", timeout=8000)
     page.locator("button").filter(has_text="\u2715").first.click()
-    page.wait_for_timeout(1000)
-    assert page.get_by_role("button", name="Clock In").is_visible()
+    page.get_by_role("button", name="Clock In").wait_for(state="visible", timeout=5000)
 
 
 def test_reset_clock_clears_all_entries(page):
@@ -273,8 +287,7 @@ def test_reset_clock_clears_all_entries(page):
     enter_clock_event(page, "08:00")
     click_clock_button(page)
     page.get_by_text("Reset today's clock").click()
-    page.wait_for_timeout(1000)
-    assert page.get_by_text("No entries yet — add your first Clock In", exact=False).is_visible()
+    page.get_by_text("No entries yet - add your first Clock In", exact=False).wait_for(state="visible", timeout=5000)
 
 
 def test_reset_restores_clock_in_action(page):
@@ -293,7 +306,7 @@ def test_reset_restores_clock_in_action(page):
 
 def test_10h_day_pattern_changes_target(page):
     switch_to_hours_today_tab(page)
-    page.get_by_text("4 days / 40 hours (10h day)").click()
+    page.get_by_text("4 days / 40 hours (10h day)", exact=True).first.click()
     page.wait_for_timeout(1500)
     enter_clock_event(page, "08:00")
     click_clock_button(page)
@@ -302,9 +315,9 @@ def test_10h_day_pattern_changes_target(page):
 
 def test_switch_to_10h_then_back_to_8h(page):
     switch_to_hours_today_tab(page)
-    page.get_by_text("4 days / 40 hours (10h day)").click()
+    page.get_by_text("4 days / 40 hours (10h day)", exact=True).first.click()
     page.wait_for_timeout(1500)
-    page.get_by_text("5 days / 40 hours (8h day)").click()
+    page.get_by_text("5 days / 40 hours (8h day)", exact=True).first.click()
     page.wait_for_timeout(1500)
     enter_clock_event(page, "08:00")
     click_clock_button(page)
