@@ -231,26 +231,42 @@ def streamlit_app():
             proc.wait()
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--headed",
+        action="store_true",
+        default=False,
+        help="Run browser tests in headed (visible) mode",
+    )
+
+
 # ─────────────────────────────────────────────
 #  Browser and page fixtures
 # ─────────────────────────────────────────────
 
 @pytest.fixture(scope='session')
-def browser(streamlit_app):
+def browser(streamlit_app, request):
+    headed = request.config.getoption("--headed", default=False)
     with sync_playwright() as p:
-        b = p.chromium.launch(headless=True)
+        b = p.chromium.launch(headless=not headed)
         yield b
         b.close()
 
 
 @pytest.fixture(scope='function')
-def page(browser, streamlit_app):
+def page(browser, streamlit_app, request):
     reset_log()
     reset_clock()
 
     url = f"http://localhost:{streamlit_app['port']}"
 
     context = browser.new_context()
+
+    # Start tracing every test — screenshots and DOM snapshots at each step.
+    # On failure the trace is saved to testLogs/ so you can open it with:
+    #   playwright show-trace testLogs/trace_<test_name>.zip
+    context.tracing.start(screenshots=True, snapshots=True, sources=True)
+
     pg = context.new_page()
     pg.goto(url)
     pg.reload()
@@ -258,13 +274,29 @@ def page(browser, streamlit_app):
     pg.get_by_text("Calculate").first.wait_for()
 
     yield pg
+
+    # Save the trace only when the test failed; discard it otherwise
+    # to avoid filling testLogs/ with traces for passing tests.
+    failed = getattr(request.node, "rep_call", None) and request.node.rep_call.failed
+    if failed:
+        trace_path = os.path.join(TEST_LOGS_DIR, f"trace_{request.node.name}.zip")
+        context.tracing.stop(path=trace_path)
+    else:
+        context.tracing.stop()
+
     context.close()
 
 
-@pytest.hookimpl(hookwrapper=True)
+# tryfirst=True ensures rep_call is stored on the node BEFORE fixture
+# teardown runs, so the page fixture can read it to decide on trace saving.
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     outcome = yield
     rep     = outcome.get_result()
+
+    # Store each phase result on the node so fixtures can check them
+    setattr(item, f"rep_{call.when}", rep)
+
     rep.extras = getattr(rep, "extras", [])
     if rep.when == "call" and rep.failed:
         page = item.funcargs.get("page")

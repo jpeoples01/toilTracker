@@ -88,9 +88,9 @@ def test_log_empty_message(page):
 def test_initial_metrics_are_zero(page):
     switch_to_annual_tab(page)
     # Metrics now render with .2f precision (e.g. "0.00h" not "0.0h")
-    assert page.locator('[data-testid="stMetric"]').filter(has_text="Hours banked").filter(has_text="0.00h").first.is_visible()
-    assert page.locator('[data-testid="stMetric"]').filter(has_text="Hours used").filter(has_text="0.00h").first.is_visible()
-    assert page.locator('[data-testid="stMetric"]').filter(has_text="Hours remaining").filter(has_text="0.00h").first.is_visible()
+    page.locator('[data-testid="stMetric"]').filter(has_text="Hours banked").filter(has_text="0.00h").first.wait_for(state="visible", timeout=8000)
+    page.locator('[data-testid="stMetric"]').filter(has_text="Hours used").filter(has_text="0.00h").first.wait_for(state="visible", timeout=8000)
+    page.locator('[data-testid="stMetric"]').filter(has_text="Hours remaining").filter(has_text="0.00h").first.wait_for(state="visible", timeout=8000)
 
 
 def test_days_equivalent_captions_visible(page):
@@ -158,7 +158,7 @@ def test_metrics_update_after_entry(page):
     switch_to_annual_tab(page)
     enter_hours_worked(page, "12")
     click_add_to_log(page)
-    assert page.locator('[data-testid="stMetric"]').filter(has_text="Hours banked").filter(has_text="4.00h").first.is_visible()
+    page.locator('[data-testid="stMetric"]').filter(has_text="Hours banked").filter(has_text="4.00h").first.wait_for(state="visible", timeout=8000)
 
 
 def test_reject_below_threshold_overtime(page):
@@ -191,7 +191,7 @@ def test_hours_used_update(page):
     page.get_by_label("Total TOIL hours used this year").fill("4")
     page.get_by_text("Update hours used").click()
     page.wait_for_timeout(1500)
-    assert page.locator('[data-testid="stMetric"]').filter(has_text="Hours used").filter(has_text="4.00h").first.is_visible()
+    page.locator('[data-testid="stMetric"]').filter(has_text="Hours used").filter(has_text="4.00h").first.wait_for(state="visible", timeout=8000)
 
 
 def test_hours_remaining_after_usage(page):
@@ -200,8 +200,7 @@ def test_hours_remaining_after_usage(page):
     click_add_to_log(page)
     page.get_by_label("Total TOIL hours used this year").fill("2")
     page.get_by_text("Update hours used").click()
-    page.wait_for_timeout(1500)
-    assert page.locator('[data-testid="stMetric"]').filter(has_text="Hours remaining").filter(has_text="2.00h").first.is_visible()
+    page.locator('[data-testid="stMetric"]').filter(has_text="Hours remaining").filter(has_text="2.00h").first.wait_for(state="visible", timeout=8000)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -247,7 +246,7 @@ def test_delete_entry_updates_metrics(page):
     page.locator("button", has_text="\u2715").first.click()
     page.wait_for_timeout(1000)
     confirm_delete(page)
-    assert page.locator('[data-testid="stMetric"]').filter(has_text="Hours banked").filter(has_text="0.00h").first.is_visible()
+    page.locator('[data-testid="stMetric"]').filter(has_text="Hours banked").filter(has_text="0.00h").first.wait_for(state="visible", timeout=8000)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -296,8 +295,8 @@ def test_clear_all_resets_metrics(page):
     page.wait_for_timeout(1000)
     page.get_by_text("Yes, clear everything").click()
     page.wait_for_timeout(1500)
-    assert page.locator('[data-testid="stMetric"]').filter(has_text="Hours banked").filter(has_text="0.00h").first.is_visible()
-    assert page.locator('[data-testid="stMetric"]').filter(has_text="Hours used").filter(has_text="0.00h").first.is_visible()
+    page.locator('[data-testid="stMetric"]').filter(has_text="Hours banked").filter(has_text="0.00h").first.wait_for(state="visible", timeout=8000)
+    page.locator('[data-testid="stMetric"]').filter(has_text="Hours used").filter(has_text="0.00h").first.wait_for(state="visible", timeout=8000)
 
 
 # ──────────────────────────────────────────────────────────────
