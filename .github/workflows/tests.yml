@@ -6,36 +6,77 @@ on:
   pull_request:
     branches: [main]
 
+# Cancel a redundant run when a new push arrives on the same branch or PR.
+# Prevents runs queuing behind each other on rapid pushes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Principle of least privilege - only grant what each step actually needs.
+# checks: write       -> dorny/test-reporter creating check runs
+# pull-requests:write -> dorny posting a summary comment on the PR
+# contents: read      -> checkout
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
 jobs:
-  Integration:
+  integration:
+    name: Integration Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20   # hard job ceiling - prevents a hung Streamlit
+                          # process from burning the full 6h Actions limit
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-          cache: 'pip'
+          cache: pip
 
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest-xdist pytest-timeout pytest-html
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt pytest-xdist pytest-timeout pytest-html
 
-      - name: Install Playwright
+      # Cache Playwright browsers by version so installs are skipped on
+      # repeat runs. Saves ~45s per run once the cache is warm.
+      - name: Resolve Playwright version
+        id: pw-version
         run: |
-          playwright install chromium
-          playwright install-deps chromium
+          echo "version=$(python -c 'import playwright; print(playwright.__version__)')" >> $GITHUB_OUTPUT
+
+      - name: Cache Playwright browser
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ steps.pw-version.outputs.version }}
+
+      # First run (cache miss): install browser binary + OS system deps
+      - name: Install Playwright browser and system deps
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: playwright install chromium --with-deps
+
+      # Subsequent runs (cache hit): browser is restored from cache,
+      # but OS-level system deps still need to be installed each time
+      - name: Install Playwright system deps
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: playwright install-deps chromium
 
       - name: Run tests
         run: |
+          mkdir -p reports
           pytest -n 2 --timeout=600 \
             --junitxml=reports/junit.xml \
             --html=reports/report.html \
             --self-contained-html
 
-      # Renders pass/fail results inline on the PR check — no download needed
+      # Renders pass/fail inline on the PR check - no download needed.
+      # fail-on-error: false so a reporter glitch does not mask the real
+      # test outcome.
       - name: Publish test results
         if: always()
         uses: dorny/test-reporter@v1
@@ -43,11 +84,26 @@ jobs:
           name: Playwright Tests
           path: reports/junit.xml
           reporter: java-junit
+          fail-on-error: false
 
-      # Full HTML report (includes screenshots on failure) as a downloadable artifact
+      # Full HTML report with embedded screenshots for any failure.
+      # Run number in the name prevents artifacts from different runs
+      # overwriting each other in the Actions UI.
       - name: Upload HTML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-report
+          name: test-report-${{ github.run_number }}
           path: reports/
+          retention-days: 30
+
+      # Playwright traces are only useful when something went wrong -
+      # uploading them on failure keeps storage usage low.
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-${{ github.run_number }}
+          path: testLogs/
+          retention-days: 7
+          if-no-files-found: ignore
